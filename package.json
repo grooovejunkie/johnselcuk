@@ -1,7 +1,7 @@
 {
   "name": "selcuk-download-manager",
   "productName": "SDM",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Çok parçalı indirme yöneticisi + Chrome eklentisi (IDM muadili)",
   "main": "src/main/main.js",
   "author": "johnselcuk",
@@ -69,7 +69,13 @@
         "deb"
       ],
       "icon": "build/icon.png",
-      "category": "Network"
+      "category": "Network",
+      "maintainer": "grooovejunkie <grooovejunkie@users.noreply.github.com>",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "SDM"
+        }
+      }
     },
     "publish": null
   }
