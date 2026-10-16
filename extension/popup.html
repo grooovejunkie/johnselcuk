@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="head">
+    <span class="logo">SDM</span><span class="dim">::</span>
+    <span id="conn" class="dim">[ ] bağlanıyor...</span>
+  </div>
+
+  <section class="box" data-title="BU SEKME">
+    <div class="in">
+      <button id="grabPage" class="b primary">[ v bu sayfadaki videoyu indir ]</button>
+      <div class="label">algılanan akışlar</div>
+      <div id="media"></div>
+    </div>
+  </section>
+
+  <section class="box" data-title="YAKALAMA">
+    <div class="in">
+      <label class="chk"><input type="checkbox" id="enabled" /><i></i>indirmeleri SDM'ye yönlendir</label>
+      <div class="field"><span>min boyut (MB)</span><input id="minSize" type="number" min="0" /></div>
+      <div class="label">bu uzantılar her boyutta yakalanır</div>
+      <textarea id="exts" rows="3" spellcheck="false"></textarea>
+      <div class="label">hariç tutulan siteler</div>
+      <textarea id="excluded" rows="2" spellcheck="false"></textarea>
+      <div class="right"><button id="save" class="b">[ kaydet ]</button></div>
+    </div>
+  </section>
+  <div class="foot dim">sağ tık menüsü: "SDM ile indir"</div>
+  <script src="popup.js"></script>
+</body>
+</html>

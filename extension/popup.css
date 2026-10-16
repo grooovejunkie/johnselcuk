@@ -1,0 +1,42 @@
+@font-face { font-family: "SDM Mono"; src: url(fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131; }
+@font-face { font-family: "SDM Mono"; src: url(fonts/jetbrains-mono-latin-ext-400-normal.woff2) format("woff2"); unicode-range: U+0100-02AF; }
+:root { --bg: #0a0b0a; --bg2: #111311; --fg: #c9d1c9; --dim: #5d665d; --faint: #2a2f2a; --green: #4dff88; --red: #ff5f56; --amber: #ffb43a; --lh: 18px; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body { width: 46ch; font: 12px/var(--lh) "SDM Mono", Consolas, "DejaVu Sans Mono", monospace; padding: 1ch; font-variant-ligatures: none; }
+.dim { color: var(--dim); }
+.head { display: flex; gap: 1ch; padding: 0 0 var(--lh) 0; }
+.logo { color: var(--green); font-weight: 700; text-shadow: 0 0 6px rgba(77, 255, 136, .45); }
+.ok { color: var(--green); } .bad { color: var(--red); }
+.box { position: relative; padding: var(--lh) 2ch; margin-bottom: 0; }
+.box > .frame { position: absolute; inset: 0; margin: 0; font: inherit; color: var(--dim); white-space: pre; overflow: hidden; pointer-events: none; }
+.in { display: flex; flex-direction: column; }
+.b { background: none; border: 0; padding: 0; font: inherit; color: var(--fg); cursor: pointer; white-space: pre; text-align: left; }
+.b:hover { background: var(--fg); color: var(--bg); }
+.b.primary { color: var(--green); }
+.b.primary:hover { background: var(--green); color: #000; }
+.b:disabled { color: var(--dim); cursor: default; background: none; }
+.label { color: var(--dim); margin-top: var(--lh); }
+.label::before { content: "# "; }
+.m { display: flex; gap: 1ch; white-space: pre; }
+.m .t { color: var(--amber); width: 5ch; flex: none; }
+.m .u { flex: 1; overflow: hidden; text-overflow: ellipsis; color: var(--fg); }
+.empty { color: var(--dim); }
+.chk { display: flex; cursor: pointer; white-space: pre; }
+.chk input { position: absolute; opacity: 0; }
+.chk i { font-style: normal; color: var(--dim); }
+.chk i::before { content: "[ ] "; }
+.chk input:checked + i { color: var(--green); }
+.chk input:checked + i::before { content: "[x] "; }
+.field { display: flex; justify-content: space-between; margin-top: var(--lh); }
+.field span { color: var(--dim); }
+input[type=number], textarea { background: var(--bg2); color: var(--fg); border: 0; outline: 0; font: inherit; line-height: var(--lh); padding: 0 1ch; caret-color: var(--green); }
+input[type=number] { width: 8ch; height: var(--lh); }
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+textarea { resize: none; width: 100%; }
+input:focus, textarea:focus { background: var(--faint); color: var(--green); }
+.right { display: flex; justify-content: flex-end; margin-top: var(--lh); }
+.foot { padding: 0 2ch; }
+textarea::-webkit-scrollbar { width: 1ch; }
+textarea::-webkit-scrollbar-thumb { background: var(--faint); }
+textarea::-webkit-scrollbar-track { background: var(--bg2); }

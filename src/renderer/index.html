@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>SDM</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="titlebar">
+    <span class="tb-name">sdm://</span>
+    <form id="quickAdd" class="quick-add">
+      <span class="prompt">&gt;</span>
+      <input id="quickUrl" placeholder="bağlantıyı yapıştır ve enter'a bas" autocomplete="off" spellcheck="false" />
+      <button type="submit" class="b primary">[ İNDİR ]</button>
+    </form>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <pre class="logo" aria-label="SDM">
+ ____  ____  __  __
+/ ___||  _ \|  \/  |
+\___ \| | | | |\/| |
+ ___) | |_| | |  | |
+|____/|____/|_|  |_|</pre>
+      <div class="sub">download manager v<span id="ver">1</span></div>
+
+      <nav id="filters" class="box" data-title="GÖRÜNÜM">
+        <div class="in">
+          <button data-filter="all" class="f active">Tümü<b data-count="all"></b></button>
+          <button data-filter="active" class="f">Etkin<b data-count="active"></b></button>
+          <button data-filter="completed" class="f">Tamamlanan<b data-count="completed"></b></button>
+          <button data-filter="paused" class="f">Duraklatılan<b data-count="paused"></b></button>
+        </div>
+      </nav>
+      <nav id="cats" class="box" data-title="KATEGORİ">
+        <div class="in">
+          <button data-filter="cat:Video" class="f">Video<b data-count="cat:Video"></b></button>
+          <button data-filter="cat:Müzik" class="f">Müzik<b data-count="cat:Müzik"></b></button>
+          <button data-filter="cat:Arşiv" class="f">Arşiv<b data-count="cat:Arşiv"></b></button>
+          <button data-filter="cat:Belgeler" class="f">Belgeler<b data-count="cat:Belgeler"></b></button>
+          <button data-filter="cat:Programlar" class="f">Programlar<b data-count="cat:Programlar"></b></button>
+          <button data-filter="cat:Resimler" class="f">Resimler<b data-count="cat:Resimler"></b></button>
+          <button data-filter="cat:Diğer" class="f">Diğer<b data-count="cat:Diğer"></b></button>
+        </div>
+      </nav>
+
+      <div class="box speed" data-title="HIZ">
+        <div class="in">
+          <pre id="spark" class="spark"></pre>
+          <div class="speed-val"><span id="totalSpeed">0 B/s</span></div>
+        </div>
+      </div>
+
+      <div class="side-actions">
+        <button id="btnExt" class="b">[ <span id="extDot" class="led">-</span> chrome eklentisi ]</button>
+        <button id="btnSettings" class="b">[ ayarlar ]</button>
+      </div>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <h1 id="viewTitle">== TÜMÜ ==</h1>
+        <div class="tools">
+          <label class="search"><span>/</span><input id="search" placeholder="ara" spellcheck="false" /></label>
+          <button class="b" id="btnResumeAll" title="Tümünü sürdür">[ &gt; sürdür ]</button>
+          <button class="b" id="btnPauseAll" title="Tümünü duraklat">[ || duraklat ]</button>
+          <button class="b" id="btnClear" title="Tamamlananları listeden kaldır">[ temizle ]</button>
+          <button class="b" id="btnFolder" title="İndirme klasörünü aç">[ klasör ]</button>
+        </div>
+      </div>
+      <section id="list" class="list"></section>
+      <div id="empty" class="empty hidden">
+<pre class="empty-art">
+      .--------.
+      |  ____  |
+      | |    | |
+      | | \/ | |
+      | |____| |
+      '--------'
+</pre>
+        <p>henüz indirme yok.</p>
+        <p class="dim">chrome'da bir dosyaya tıkla, oynatıcının üstündeki<br>[ v SDM ile indir ] düğmesine bas ya da yukarıya bağlantı yapıştır.</p>
+        <p class="dim cursor">_</p>
+      </div>
+    </main>
+  </div>
+
+  <footer class="statusbar">
+    <span id="stBridge">köprü...</span>
+    <span id="stYtdlp"></span>
+    <span class="grow"></span>
+    <span id="stSummary"></span>
+  </footer>
+
+  <!-- Yeni indirme -->
+  <dialog id="dlgPrompt" class="modal box" data-title="YENİ İNDİRME">
+    <form method="dialog" class="in">
+      <div class="field"><label>adres</label><input id="pUrl" readonly /></div>
+      <div class="field" id="pNameRow"><label>dosya adı</label><input id="pName" spellcheck="false" /></div>
+      <div class="field hidden" id="pQualityRow">
+        <label>kalite</label>
+        <div class="radio" id="pQuality">
+          <button type="button" data-q="best">en iyi</button>
+          <button type="button" data-q="1080">1080p</button>
+          <button type="button" data-q="720">720p</button>
+          <button type="button" data-q="480">480p</button>
+          <button type="button" data-q="audio">sadece ses (mp3)</button>
+        </div>
+      </div>
+      <div class="field"><label>klasör</label>
+        <div class="row"><input id="pDir" placeholder="varsayılan (kategoriye göre)" readonly /><button type="button" class="b" id="pDirBtn">[ seç ]</button></div>
+      </div>
+      <pre class="pinfo" id="pInfo"></pre>
+      <div class="actions">
+        <button value="cancel" class="b">[ vazgeç ]</button>
+        <button value="later" class="b">[ sonra ]</button>
+        <button value="start" class="b primary">[ BAŞLAT ]</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Ayarlar -->
+  <dialog id="dlgSettings" class="modal box" data-title="AYARLAR">
+    <form method="dialog" class="in">
+      <div class="field"><label>indirme klasörü</label>
+        <div class="row"><input id="sDir" readonly /><button type="button" class="b" id="sDirBtn">[ değiştir ]</button></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>dosya başına bağlantı</label><input id="sSegments" type="number" min="1" max="32" /></div>
+        <div class="field"><label>aynı anda indirme</label><input id="sConcurrent" type="number" min="1" max="10" /></div>
+        <div class="field"><label>hız sınırı kb/s (0=yok)</label><input id="sLimit" type="number" min="0" /></div>
+        <div class="field"><label>video kalitesi</label>
+          <div class="radio" id="sQuality">
+            <button type="button" data-q="best">en iyi</button>
+            <button type="button" data-q="1080">1080</button>
+            <button type="button" data-q="720">720</button>
+            <button type="button" data-q="audio">ses</button>
+          </div>
+        </div>
+      </div>
+      <div class="checks">
+        <label class="chk"><input type="checkbox" id="sSort" /><i></i>dosyaları kategori klasörlerine ayır</label>
+        <label class="chk"><input type="checkbox" id="sAsk" /><i></i>tarayıcıdan gelen indirmelerde önce sor</label>
+        <label class="chk"><input type="checkbox" id="sResume" /><i></i>açılışta yarım kalanları sürdür</label>
+        <label class="chk"><input type="checkbox" id="sLogin" /><i></i>bilgisayar açılınca başlat (gizli)</label>
+        <label class="chk"><input type="checkbox" id="sTray" /><i></i>kapatınca sistem tepsisinde çalış</label>
+        <label class="chk"><input type="checkbox" id="sNotify" /><i></i>tamamlanınca bildirim göster</label>
+      </div>
+      <div class="field"><label>video motoru (yt-dlp)</label>
+        <div class="row"><input id="sYtdlp" readonly /><button type="button" class="b" id="sYtdlpBtn">[ güncelle ]</button></div>
+      </div>
+      <div class="actions">
+        <button value="cancel" class="b">[ vazgeç ]</button>
+        <button value="save" class="b primary">[ KAYDET ]</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Eklenti kurulumu -->
+  <dialog id="dlgExt" class="modal box" data-title="CHROME EKLENTİSİ">
+    <form method="dialog" class="in">
+      <pre class="pinfo" id="extState"></pre>
+<pre class="steps">
+ 1. chrome'da adres çubuğuna  chrome://extensions  yaz
+ 2. sağ üstten  [Geliştirici modu]  nu aç
+ 3. [Paketlenmemiş öğe yükle] ye tıkla, aşağıdaki klasörü seç
+ 4. eklenti simgesinde [ON] görünüyorsa bağlantı tamam
+</pre>
+      <div class="field"><label>eklenti klasörü</label>
+        <div class="row"><input id="extDir" readonly /><button type="button" class="b" id="extDirBtn">[ aç ]</button></div>
+      </div>
+      <p class="dim">edge, brave, opera ve vivaldi'de de aynı adımlar.</p>
+      <div class="actions"><button value="ok" class="b primary">[ TAMAM ]</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+  <script src="ascii.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
