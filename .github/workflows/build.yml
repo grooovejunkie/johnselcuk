@@ -53,10 +53,18 @@ jobs:
             dist/*.deb
             dist/*.zip
           if-no-files-found: ignore
+      - name: Sürüm numarasını oku
+        id: ver
+        shell: bash
+        run: echo "v=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      # Etiketle tetiklenince o etiket, elle (Run workflow) tetiklenince package.json'daki
+      # sürüm kullanılır; etiket yoksa bu adım onu oluşturur.
       - name: Sürüme yükle
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          name: SDM ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || steps.ver.outputs.v }}
           draft: false
           files: |
             dist/*.exe
