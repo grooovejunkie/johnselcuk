@@ -10,9 +10,18 @@
     <span id="conn" class="dim">[ ] bağlanıyor...</span>
   </div>
 
+  <section class="box hidden" data-title="SON HATA" id="failBox">
+    <div class="in">
+      <div id="failText" class="err"></div>
+      <div class="dim">indirme chrome'da devam etti, dosya kaybolmadı.</div>
+      <div class="right"><button id="failClear" class="b">[ tamam ]</button></div>
+    </div>
+  </section>
+
   <section class="box" data-title="BU SEKME">
     <div class="in">
       <button id="grabPage" class="b primary">[ v bu sayfadaki videoyu indir ]</button>
+      <label class="chk"><input type="checkbox" id="siteOverlay" /><i></i>bu sitede video düğmesini göster</label>
       <div class="label">algılanan akışlar</div>
       <div id="media"></div>
     </div>
@@ -21,6 +30,7 @@
   <section class="box" data-title="YAKALAMA">
     <div class="in">
       <label class="chk"><input type="checkbox" id="enabled" /><i></i>indirmeleri SDM'ye yönlendir</label>
+      <label class="chk"><input type="checkbox" id="overlay" /><i></i>videolarda "SDM ile indir" düğmesi</label>
       <div class="field"><span>min boyut (MB)</span><input id="minSize" type="number" min="0" /></div>
       <div class="label">bu uzantılar her boyutta yakalanır</div>
       <textarea id="exts" rows="3" spellcheck="false"></textarea>

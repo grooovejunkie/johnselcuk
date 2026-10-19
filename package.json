@@ -1,7 +1,7 @@
 {
   "name": "selcuk-download-manager",
   "productName": "SDM",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Çok parçalı indirme yöneticisi + Chrome eklentisi (IDM muadili)",
   "main": "src/main/main.js",
   "author": "johnselcuk",

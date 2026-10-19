@@ -60,7 +60,8 @@ function startBridge({ version, onDownload, onVideo, onPing }) {
         const out = await (req.url === '/video' ? onVideo(body) : onDownload(body));
         reply(200, { ok: true, ...(out || {}) });
       } catch (e) {
-        reply(500, { error: e.message });
+        // fallback: SDM bu dosyayı alamıyor; eklenti indirmeyi Chrome'da sürdürmeli.
+        reply(e.fallback ? 409 : 500, { error: e.message, fallback: !!e.fallback });
       }
     });
   });

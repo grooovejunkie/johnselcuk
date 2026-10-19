@@ -27,9 +27,17 @@ const DEFAULT_UA =
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const HTTP_REASONS = {
+  401: 'oturum gerekli (sitede giriş yapılmış olmalı)',
+  403: 'erişim reddedildi (site koruması ya da oturum süresi dolmuş)',
+  404: 'dosya bulunamadı',
+  410: 'bağlantının süresi dolmuş',
+  429: 'çok fazla istek (site hız sınırı)',
+};
+
 class HttpError extends Error {
   constructor(status, msg) {
-    super(msg || `HTTP ${status}`);
+    super(msg || `HTTP ${status}${HTTP_REASONS[status] ? ': ' + HTTP_REASONS[status] : status >= 500 ? ': sunucu hatası' : ''}`);
     this.status = status;
     // 4xx (408/429 hariç) kalıcı hatadır; tekrar denemenin anlamı yok.
     this.fatal = status >= 400 && status < 500 && status !== 408 && status !== 429;
@@ -50,8 +58,14 @@ function request(url, { headers = {}, signal, timeout = 30000 } = {}, redirects 
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
         res.resume();
         if (redirects >= 10) return reject(new Error('Çok fazla yönlendirme'));
-        const next = new URL(res.headers.location, u).toString();
-        return resolve(request(next, { headers, signal, timeout }, redirects + 1));
+        const next = new URL(res.headers.location, u);
+        // Çerezler yalnızca kendi alan adına gider; başka bir alana yönlendirmede düşürülür.
+        let nextHeaders = headers;
+        if (next.hostname !== u.hostname && headers.Cookie) {
+          nextHeaders = { ...headers };
+          delete nextHeaders.Cookie;
+        }
+        return resolve(request(next.toString(), { headers: nextHeaders, signal, timeout }, redirects + 1));
       }
       res.finalUrl = url;
       // Gövde akarken de bağlantı donarsa düşür.
@@ -62,8 +76,8 @@ function request(url, { headers = {}, signal, timeout = 30000 } = {}, redirects 
   });
 }
 
-async function probe(url, headers) {
-  const res = await request(url, { headers: { ...headers, Range: 'bytes=0-0' } });
+async function probe(url, headers, transport = request) {
+  const res = await transport(url, { headers: { ...headers, Range: 'bytes=0-0' } });
   res.resume();
   res.destroy();
   if (res.statusCode >= 400) throw new HttpError(res.statusCode);
@@ -109,7 +123,7 @@ class HttpTask {
     if (!it.segments || !it.segments.length) {
       it.status = 'probing';
       this.m.touch(it);
-      const info = await probe(it.url, it.headers);
+      const info = await probe(it.url, it.headers, this.m.transport);
       if (this.stopped) return;
       if (it.savePath) await fsp.rm(it.savePath + '.sdmpart', { force: true }).catch(() => {});
       it.finalUrl = info.finalUrl;
@@ -191,7 +205,7 @@ class HttpTask {
     const ranged = it.resumable;
     const headers = this.headers();
     if (ranged) headers.Range = `bytes=${seg.pos}-${seg.end === Infinity ? '' : seg.end}`;
-    const res = await request(it.finalUrl || it.url, { headers, signal: this.ac.signal });
+    const res = await this.m.transport(it.finalUrl || it.url, { headers, signal: this.ac.signal });
     if (res.statusCode >= 400) { res.resume(); throw new HttpError(res.statusCode); }
     if (ranged && res.statusCode === 200) {
       res.destroy();
@@ -267,8 +281,13 @@ function extFromMime(mime) {
 // ---------------------------------------------------------------------------
 // Kuyruk, kalıcılık, hız ölçümü ve hız sınırı.
 class DownloadManager extends EventEmitter {
-  constructor({ statePath, settings, runners = {} }) {
+  // transport: (url, {headers, signal, timeout}) => yanıt akışı. Uygulamada Chromium ağ
+  // katmanı (Electron net) kullanılır; testlerde Node'un http modülü.
+  // beforeStart: indirme başlamadan önce çağrılır (ör. çerezleri çerez kavanozuna koymak).
+  constructor({ statePath, settings, runners = {}, transport = request, beforeStart = null }) {
     super();
+    this.transport = transport;
+    this.beforeStart = beforeStart;
     this.statePath = statePath;
     this.settings = settings;
     this.runners = { http: HttpTask, ...runners };
@@ -400,7 +419,8 @@ class DownloadManager extends EventEmitter {
     this.tasks.set(it.id, task);
     it.error = null;
     this.samples.set(it.id, { t: Date.now(), bytes: this.view(it).downloaded, speed: 0 });
-    task.run().then(
+    const prep = this.beforeStart ? Promise.resolve(this.beforeStart(it)).catch(() => {}) : Promise.resolve();
+    prep.then(() => task.run()).then(
       () => {
         if (task.stopped) return;
         this.tasks.delete(it.id);

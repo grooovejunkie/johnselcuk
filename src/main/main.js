@@ -6,6 +6,7 @@ const { DownloadManager, probe } = require('./engine');
 const { YtDlp, makeVideoTask } = require('./video');
 const { startBridge, PORT } = require('./bridge');
 const { formatBytes } = require('./util');
+const chromiumNet = require('./nettransport');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -39,6 +40,8 @@ const manager = new DownloadManager({
   statePath: path.join(userData, 'downloads.json'),
   settings,
   runners: { video: makeVideoTask(ytdlp) },
+  transport: chromiumNet.request,
+  beforeStart: (it) => chromiumNet.importCookies(it.cookies),
 });
 
 let win = null;
@@ -128,8 +131,28 @@ function headersFrom(body) {
   const h = {};
   if (body.userAgent) h['User-Agent'] = body.userAgent;
   if (body.referrer) h.Referer = body.referrer;
-  if (body.cookieHeader) h.Cookie = body.cookieHeader;
+  // Çerez dizisi varsa çerez kavanozu kullanılır; düz başlık yalnızca eski eklenti sürümleri için.
+  if (body.cookieHeader && !(body.cookies && body.cookies.length)) h.Cookie = body.cookieHeader;
   return h;
+}
+
+// Eklenti Chrome'un indirmesini yalnızca SDM'nin dosyayı gerçekten alabildiği kesinleşince
+// iptal eder. Burada küçük bir deneme isteği (Range 0-0) atılır; 4xx/5xx ya da dosya yerine
+// HTML (giriş / koruma sayfası) dönerse indirme Chrome'a bırakılır.
+async function verifyCapture(b, headers) {
+  await chromiumNet.importCookies(b.cookies);
+  const fallback = (msg) => Object.assign(new Error(msg), { fallback: true });
+  let info;
+  try {
+    info = await probe(b.url, headers, chromiumNet.request);
+  } catch (e) {
+    throw fallback(e.message);
+  }
+  const browserMime = String(b.mime || '').toLowerCase();
+  if (/^text\/html/.test(info.mime) && !browserMime.includes('html')) {
+    throw fallback('site dosya yerine bir sayfa döndürdü (giriş ya da koruma sayfası)');
+  }
+  return info;
 }
 
 function enqueue(req) {
@@ -146,13 +169,18 @@ async function setupBridge() {
     await startBridge({
       version: app.getVersion(),
       onPing: () => { lastExtensionPing = Date.now(); send('extension', true); return {}; },
-      onDownload: (b) => enqueue({
-        kind: 'http',
-        url: b.url,
-        filename: b.filename || undefined,
-        headers: headersFrom(b),
-        size: b.fileSize,
-      }),
+      onDownload: async (b) => {
+        const headers = headersFrom(b);
+        if (b.verify) await verifyCapture(b, headers);
+        return enqueue({
+          kind: 'http',
+          url: b.url,
+          filename: b.filename || undefined,
+          headers,
+          cookies: b.cookies,
+          size: b.fileSize,
+        });
+      },
       onVideo: (b) => enqueue({
         kind: 'video',
         url: b.pageUrl || b.url,
@@ -199,8 +227,13 @@ ipcMain.handle('show-in-folder', (_e, p) => {
   else shell.openPath(settings.downloadDir);
 });
 ipcMain.handle('open-downloads', () => { fs.mkdirSync(settings.downloadDir, { recursive: true }); shell.openPath(settings.downloadDir); });
-ipcMain.handle('probe', async (_e, url, headers) => {
-  try { return await probe(url, headers || {}); } catch (e) { return { error: e.message }; }
+ipcMain.handle('probe', async (_e, url, headers, cookies) => {
+  try {
+    await chromiumNet.importCookies(cookies);
+    return await probe(url, headers || {}, chromiumNet.request);
+  } catch (e) {
+    return { error: e.message };
+  }
 });
 ipcMain.handle('confirm-prompt', (_e, id, overrides) => {
   const p = prompts.get(id);

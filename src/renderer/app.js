@@ -257,7 +257,7 @@ async function openPrompt(p) {
   if (!dlg.open) dlg.showModal();
   ASCII.draw(dlg);
   if (!isVideo) {
-    const info = await sdm.probe(p.url, p.headers);
+    const info = await sdm.probe(p.url, p.headers, p.cookies);
     if (currentPrompt !== p) return;
     if (info.error) { $('#pInfo').textContent = `! ${info.error}\n  (yine de deneyebilirsin)`; return; }
     if (!$('#pName').value) $('#pName').value = info.filename || '';

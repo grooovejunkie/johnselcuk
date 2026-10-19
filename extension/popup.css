@@ -40,3 +40,6 @@ input:focus, textarea:focus { background: var(--faint); color: var(--green); }
 textarea::-webkit-scrollbar { width: 1ch; }
 textarea::-webkit-scrollbar-thumb { background: var(--faint); }
 textarea::-webkit-scrollbar-track { background: var(--bg2); }
+.hidden { display: none !important; }
+.err { color: var(--red); white-space: pre-wrap; word-break: break-word; }
+#grabPage { margin-bottom: var(--lh); }

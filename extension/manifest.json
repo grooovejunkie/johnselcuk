@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SDM — İndirme Yakalayıcı",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Chrome indirmelerini ve sayfalardaki videoları SDM İndirme Yöneticisi'ne gönderir.",
   "icons": {
     "16": "icons/icon16.png",

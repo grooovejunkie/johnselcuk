@@ -11,6 +11,8 @@ const DEFAULTS = {
   minSizeMB: 5,
   exts: 'zip rar 7z tar gz bz2 xz iso img exe msi dmg pkg deb rpm apk appimage mp4 mkv webm avi mov wmv flv m4v mp3 m4a flac wav aac ogg opus pdf epub docx xlsx pptx torrent bin',
   excluded: 'mail.google.com drive.google.com docs.google.com',
+  overlay: true, // videoların üstündeki "SDM ile indir" düğmesi
+  overlayOff: '', // düğmenin gösterilmeyeceği siteler
 };
 const skipOnce = new Set();
 
@@ -24,8 +26,9 @@ async function ping() {
     const r = await fetch(`${API}/ping`, { signal: AbortSignal.timeout(1500) });
     ok = r.ok;
   } catch { /* SDM kapalı */ }
-  chrome.action.setBadgeText({ text: ok ? '' : 'OFF' });
-  chrome.action.setBadgeBackgroundColor({ color: ok ? '#1a7f3c' : '#5d665d' });
+  const { lastFailure } = await chrome.storage.session.get('lastFailure');
+  chrome.action.setBadgeText({ text: !ok ? 'OFF' : lastFailure ? '!' : '' });
+  chrome.action.setBadgeBackgroundColor({ color: !ok ? '#5d665d' : lastFailure ? '#b3261e' : '#1a7f3c' });
   return ok;
 }
 
@@ -34,10 +37,11 @@ async function post(path, body) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(20000),
   });
-  if (!r.ok) throw new Error(`SDM yanıtı: ${r.status}`);
-  return r.json();
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return { error: data.error || `SDM yanıtı: ${r.status}`, fallback: !!data.fallback };
+  return data;
 }
 
 async function cookiesFor(url) {
@@ -45,7 +49,7 @@ async function cookiesFor(url) {
     const list = await chrome.cookies.getAll({ url });
     return {
       cookieHeader: list.map((c) => `${c.name}=${c.value}`).join('; '),
-      cookies: list.map(({ domain, hostOnly, path, secure, expirationDate, name, value }) => ({ domain, hostOnly, path, secure, expirationDate, name, value })),
+      cookies: list.map(({ domain, hostOnly, path, secure, httpOnly, sameSite, expirationDate, name, value }) => ({ domain, hostOnly, path, secure, httpOnly, sameSite, expirationDate, name, value })),
     };
   } catch {
     return { cookieHeader: '', cookies: [] };
@@ -60,9 +64,19 @@ function isExcluded(url, s) {
   return !!h && s.excluded.split(/[\s,]+/).filter(Boolean).some((x) => h === x || h.endsWith('.' + x));
 }
 
-async function sendDownload({ url, referrer, filename, fileSize, mime }) {
+async function sendDownload({ url, referrer, filename, fileSize, mime, verify = false }) {
   const c = await cookiesFor(url);
-  return post('/download', { url, referrer, filename, fileSize, mime, userAgent: navigator.userAgent, cookieHeader: c.cookieHeader });
+  return post('/download', {
+    url, referrer, filename, fileSize, mime, verify, userAgent: navigator.userAgent,
+    cookies: c.cookies, cookieHeader: c.cookieHeader,
+  });
+}
+
+// SDM'nin indiremediği son dosya: açılır pencerede gösterilir.
+async function noteFailure(name, error) {
+  await chrome.storage.session.set({ lastFailure: { name, error, ts: Date.now() } });
+  chrome.action.setBadgeText({ text: '!' });
+  chrome.action.setBadgeBackgroundColor({ color: '#b3261e' });
 }
 
 async function sendVideo({ pageUrl, candidates = [], title, referrer, quality }) {
@@ -92,13 +106,23 @@ async function maybeCapture(item) {
   if (!s.exts.split(/\s+/).includes(extOf(name)) && !big) return;
   if (!(await ping())) return; // SDM kapalı: Chrome indirsin
 
-  try { await chrome.downloads.cancel(item.id); await chrome.downloads.erase({ id: item.id }); } catch { /* zaten bitmiş olabilir */ }
+  // İptal etmeden önce duraklat: SDM dosyayı alamazsa (site koruması, oturum, tek
+  // kullanımlık bağlantı) Chrome kaldığı yerden devam eder, dosya kaybolmaz.
+  try { await chrome.downloads.pause(item.id); } catch { /* küçük dosya çoktan bitmiş olabilir */ }
+  const [now] = await chrome.downloads.search({ id: item.id });
+  if (!now || now.state !== 'in_progress') return; // Chrome zaten bitirdi
+
+  let res;
   try {
-    await sendDownload({ url, referrer: item.referrer, filename: name, fileSize: item.totalBytes, mime: item.mime });
-  } catch {
-    // SDM son anda yanıt vermedi: indirmeyi Chrome'a geri ver.
-    skipOnce.add(url);
-    chrome.downloads.download({ url });
+    res = await sendDownload({ url, referrer: item.referrer, filename: name, fileSize: item.totalBytes, mime: item.mime, verify: true });
+  } catch (e) {
+    res = { error: e.message };
+  }
+  if (res && res.ok) {
+    try { await chrome.downloads.cancel(item.id); await chrome.downloads.erase({ id: item.id }); } catch { /* yok say */ }
+  } else {
+    try { await chrome.downloads.resume(item.id); } catch { /* yok say */ }
+    await noteFailure(name, (res && res.error) || 'SDM yanıt vermedi');
   }
 }
 
@@ -131,29 +155,40 @@ chrome.webRequest.onHeadersReceived.addListener(
   ['responseHeaders']
 );
 
+// Bellek içi önbellek: her ağ isteğinde depolamayı okumamak için. Service worker uykuya
+// geçerse chrome.storage.session'dan geri yüklenir.
+const mediaCache = new Map();
+
 async function remember(tabId, m) {
   const key = `tab:${tabId}`;
-  const cur = (await chrome.storage.session.get(key))[key] || [];
+  let cur = mediaCache.get(key);
+  if (!cur) { cur = (await chrome.storage.session.get(key))[key] || []; mediaCache.set(key, cur); }
   const base = m.url.split('?')[0];
   if (cur.some((x) => x.url === m.url || (m.type !== 'hls' && x.url.split('?')[0] === base))) return;
   cur.push({ ...m, ts: Date.now() });
-  await chrome.storage.session.set({ [key]: cur.slice(-40) });
+  if (cur.length > 40) cur.splice(0, cur.length - 40);
+  await chrome.storage.session.set({ [key]: cur });
   chrome.action.setBadgeText({ tabId, text: String(cur.length) });
   chrome.action.setBadgeBackgroundColor({ tabId, color: '#1a7f3c' });
 }
 
 async function mediaFor(tabId) {
   const key = `tab:${tabId}`;
-  return (await chrome.storage.session.get(key))[key] || [];
+  return mediaCache.get(key) || (await chrome.storage.session.get(key))[key] || [];
+}
+
+function forgetTab(tabId) {
+  mediaCache.delete(`tab:${tabId}`);
+  chrome.storage.session.remove(`tab:${tabId}`);
 }
 
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === 'loading' && info.url) {
-    chrome.storage.session.remove(`tab:${tabId}`);
+    forgetTab(tabId);
     chrome.action.setBadgeText({ tabId, text: '' });
   }
 });
-chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(`tab:${tabId}`));
+chrome.tabs.onRemoved.addListener((tabId) => forgetTab(tabId));
 
 // HLS ana listesi önce, sonra DASH, sonra doğrudan dosyalar (büyükten küçüğe).
 function rankCandidates(list) {
@@ -176,18 +211,29 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       if (msg.type === 'grabVideo') {
         if (!(await ping())) return reply({ error: 'SDM çalışmıyor' });
         const tab = sender.tab || (await chrome.tabs.get(msg.tabId));
-        await grabVideo({ tab, frameUrl: sender.tab && sender.frameId ? sender.url : msg.frameUrl, src: msg.src, title: msg.title, quality: msg.quality });
-        return reply({ ok: true });
+        return reply(await grabVideo({ tab, frameUrl: sender.tab && sender.frameId ? sender.url : msg.frameUrl, src: msg.src, title: msg.title, quality: msg.quality }));
       }
       if (msg.type === 'grabStream') {
         if (!(await ping())) return reply({ error: 'SDM çalışmıyor' });
         const tab = await chrome.tabs.get(msg.tabId);
-        if (msg.direct) await sendDownload({ url: msg.url, referrer: tab.url });
-        else await sendVideo({ pageUrl: msg.url, title: tab.title, referrer: tab.url });
-        return reply({ ok: true });
+        return reply(msg.direct
+          ? await sendDownload({ url: msg.url, referrer: tab.url })
+          : await sendVideo({ pageUrl: msg.url, title: tab.title, referrer: tab.url }));
       }
       if (msg.type === 'state') {
-        return reply({ online: await ping(), media: msg.tabId ? await mediaFor(msg.tabId) : [], settings: await getSettings() });
+        const { lastFailure } = await chrome.storage.session.get('lastFailure');
+        return reply({ online: await ping(), media: msg.tabId ? await mediaFor(msg.tabId) : [], settings: await getSettings(), lastFailure });
+      }
+      if (msg.type === 'clearFailure') {
+        await chrome.storage.session.remove('lastFailure');
+        await ping();
+        return reply({ ok: true });
+      }
+      if (msg.type === 'overlayAllowed') {
+        const s = await getSettings();
+        const h = hostOf(msg.url || '');
+        const off = s.overlayOff.split(/[\s,]+/).filter(Boolean).some((x) => h === x || h.endsWith('.' + x));
+        return reply({ allowed: s.overlay && !off });
       }
       if (msg.type === 'saveSettings') {
         await chrome.storage.sync.set(msg.settings);

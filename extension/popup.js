@@ -68,6 +68,22 @@ function renderMedia(list) {
   $('#grabPage').disabled = !st.online || !/^https?:/.test((tab && tab.url) || '');
   renderMedia(st.media || []);
   $('#enabled').checked = st.settings.enabled;
+  $('#overlay').checked = st.settings.overlay;
+  const host = (() => { try { return new URL(tab.url).hostname; } catch { return ''; } })();
+  const offList = st.settings.overlayOff.split(/[\s,]+/).filter(Boolean);
+  $('#siteOverlay').checked = !offList.some((x) => host === x || host.endsWith('.' + x));
+  $('#siteOverlay').disabled = !host;
+  $('#siteOverlay').onchange = async () => {
+    const base = host.replace(/^www\./, '');
+    const next = offList.filter((x) => x !== base && x !== host);
+    if (!$('#siteOverlay').checked) next.push(base);
+    offList.splice(0, offList.length, ...next);
+    await send({ type: 'saveSettings', settings: { overlayOff: next.join(' ') } });
+  };
+  if (st.lastFailure) {
+    $('#failBox').classList.remove('hidden');
+    $('#failText').textContent = `! ${st.lastFailure.name}\n  ${st.lastFailure.error}`;
+  }
   $('#minSize').value = st.settings.minSizeMB;
   $('#exts').value = st.settings.exts;
   $('#excluded').value = st.settings.excluded;
@@ -82,6 +98,11 @@ $('#grabPage').onclick = async () => {
   b.textContent = r && r.ok ? "[ ok SDM'ye gönderildi ]" : `[ ! ${(r && r.error) || 'hata'} ]`;
 };
 $('#enabled').onchange = () => send({ type: 'saveSettings', settings: { enabled: $('#enabled').checked } });
+$('#overlay').onchange = () => send({ type: 'saveSettings', settings: { overlay: $('#overlay').checked } });
+$('#failClear').onclick = async () => {
+  await send({ type: 'clearFailure' });
+  $('#failBox').classList.add('hidden');
+};
 $('#save').onclick = async () => {
   await send({ type: 'saveSettings', settings: {
     enabled: $('#enabled').checked,

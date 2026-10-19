@@ -185,6 +185,24 @@ test('hız sınırı uygulanır', async () => {
   await m.shutdown();
 });
 
+test('başka alan adına yönlendirmede çerez gönderilmez', async () => {
+  const { request } = require('../src/main/engine');
+  const seen = {};
+  const other = http.createServer((req, res) => { seen.other = req.headers.cookie || null; res.end('ok'); });
+  await new Promise((r) => other.listen(0, '127.0.0.1', r));
+  const first = http.createServer((req, res) => {
+    seen.first = req.headers.cookie || null;
+    res.writeHead(302, { Location: `http://localhost:${other.address().port}/f` });
+    res.end();
+  });
+  await new Promise((r) => first.listen(0, '127.0.0.1', r));
+  const res = await request(`http://127.0.0.1:${first.address().port}/x`, { headers: { Cookie: 'sess=gizli' } });
+  for await (const _ of res) { /* tüket */ }
+  first.close(); other.close();
+  assert.strictEqual(seen.first, 'sess=gizli');
+  assert.strictEqual(seen.other, null);
+});
+
 test('dosya adı yardımcıları', () => {
   assert.strictEqual(filenameFromDisposition('attachment; filename="a b.zip"'), 'a b.zip');
   assert.strictEqual(sanitizeFilename('con.txt'), '_con.txt');
